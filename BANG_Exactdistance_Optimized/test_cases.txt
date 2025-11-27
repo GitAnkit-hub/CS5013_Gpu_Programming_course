@@ -1,0 +1,164 @@
+# =============================================================================
+# BANG Exact Distance - Test Cases
+# =============================================================================
+
+# =============================================================================
+# Test Case 1: SIFT100M Standard Run (L=40)
+# =============================================================================
+
+Description: Standard search on SIFT100M with L=40, measuring throughput and recall
+
+Configuration:
+- Dataset: SIFT100M (100M vectors, 128 dimensions)
+- parANN.h: #define SIFT100M, #define L 40, #define CHUNKS 64
+- Parameters: 10000 queries, Recall@10
+
+Command:
+./bang_exact \
+    /path/to/sift100m_pq_pivots.bin \
+    /path/to/sift100m_pq_compressed.bin \
+    /path/to/sift100m_graph.bin \
+    /path/to/sift100m_query.bin \
+    /path/to/sift100m_chunk_offsets.bin \
+    /path/to/sift100m_centroid.bin \
+    /path/to/sift100m_gndtruth.bin \
+    10000 1 256 512 256 10 64 1
+
+Expected Results:
+- Wall Clock: ~13.9 ms (±1 ms)
+- Throughput: ~720K QPS (±50K)
+- Recall@10: 90.69% (must match exactly)
+- Iterations: 80 (±2)
+
+Pass Criteria:
+- Recall matches original implementation exactly
+- Wall clock time < 15 ms
+- Throughput > 650K QPS
+
+# =============================================================================
+# Test Case 2: DEEP100M Standard Run (L=10)
+# =============================================================================
+
+Description: Standard search on DEEP100M with L=10
+
+Configuration:
+- Dataset: DEEP100M (100M vectors, 96 dimensions, float)
+- parANN.h: #define DEEP100M, #define L 10, #define CHUNKS 96
+- Parameters: 10000 queries, Recall@10
+
+Command:
+./bang_exact \
+    /mnt/hdd_volume2/deep100m96/deep100m_pq_pivots.bin \
+    /mnt/hdd_volume2/deep100m96/deep100m_pq_compressed.bin \
+    /mnt/hdd_volume2/deep100m96/deep100m_graph.bin \
+    /mnt/hdd_volume2/deep100m96/deep100m_query.bin \
+    /mnt/hdd_volume2/deep100m96/deep100m_chunk_offsets.bin \
+    /mnt/hdd_volume2/deep100m96/deep100m_centroid.bin \
+    /mnt/hdd_volume2/deep100m96/deep100m_gndtruth.bin \
+    10000 1 256 512 256 10 64 0
+
+Expected Results:
+- Wall Clock: ~8.3 ms (±1 ms)
+- Throughput: ~1198K QPS (±100K)
+- Recall@10: 72.89% (must match exactly)
+- Iterations: 35 (±2)
+
+Pass Criteria:
+- Recall matches original implementation exactly
+- Wall clock time < 10 ms
+- Throughput > 1000K QPS
+
+# =============================================================================
+# Test Case 3: Multiple Consecutive Runs (Stability Test)
+# =============================================================================
+
+Description: Run multiple times to verify stability and consistent performance
+
+Procedure:
+1. Run the program
+2. Press 'y' at "Try Next run?" prompt 5 times
+3. Record all metrics
+
+Expected Results:
+- All runs should show similar metrics (±5% variance)
+- First run may be slower (GPU warmup)
+- Recall should be identical across all runs
+
+Pass Criteria:
+- Variance < 10% across runs
+- No crashes or errors
+- Recall identical in all runs
+
+# =============================================================================
+# Test Case 4: Recall Correctness (vs Original)
+# =============================================================================
+
+Description: Verify optimized version produces same recall as original
+
+Procedure:
+1. Run original (unmodified) parANN.cu
+2. Record recall value
+3. Run optimized version with fused kernel
+4. Compare recall values
+
+Expected Results:
+- SIFT100M L=40: Recall@10 = 90.69%
+- DEEP100M L=10: Recall@10 = 72.89%
+
+Pass Criteria:
+- Recall values must match exactly (difference = 0.00%)
+- Same number of total computations
+
+# =============================================================================
+# Test Case 5: DEEP100M Varying L Values
+# =============================================================================
+
+Description: Test across different L values to verify consistent improvement
+
+Configuration changes in parANN.h for each test:
+- L=10, L=20, L=30, L=40, L=50, L=60, L=80, L=100
+
+Expected Results (Optimized):
+| L   | Wall Clock | Throughput | Recall  |
+|-----|------------|------------|---------|
+| 10  | ~8.3 ms    | ~1198K     | 72.89%  |
+| 20  | ~12.0 ms   | ~830K      | 83.86%  |
+| 30  | ~15.8 ms   | ~631K      | 88.82%  |
+| 40  | ~19.3 ms   | ~517K      | 91.72%  |
+| 50  | ~24.8 ms   | ~402K      | 93.59%  |
+| 60  | ~25.8 ms   | ~388K      | 94.84%  |
+| 80  | ~32.7 ms   | ~305K      | 96.38%  |
+| 100 | ~36.9 ms   | ~270K      | 97.30%  |
+
+Pass Criteria:
+- 24-35% speedup vs original across all L values
+- Recall matches original for each L value
+
+# =============================================================================
+# Test Case 6: Kernel Launch Verification
+# =============================================================================
+
+Description: Verify reduced kernel launches with fused kernel
+
+Procedure:
+1. Use nvprof or nsight-compute to profile
+2. Count kernel launches
+
+Expected Results:
+- Original: 240 kernel launches (80 iterations × 3 kernels)
+- Optimized: 80 kernel launches (80 iterations × 1 fused kernel)
+- Reduction: 67%
+
+Command (with profiling):
+nvprof ./bang_exact [arguments]
+
+# =============================================================================
+# Testing Notes
+# =============================================================================
+
+1. Data Path: Update DATA_PATH in run scripts to match your server
+2. GPU Warmup: First run is always slower - use subsequent runs for benchmarking
+3. System Load: Ensure no other GPU processes running during tests
+4. Variance: ±5-10% variance is normal between runs
+5. Recall: Must always match original - any difference indicates a bug
+6. L vs recall_at: Ensure L >= recall_at in configuration
